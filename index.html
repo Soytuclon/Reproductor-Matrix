@@ -1,28 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-
-  <head>
-    <meta charset="UTF-8">
-    <title>Reproductor Matrix</title>
-    <link rel="stylesheet" href="./style.css">
-
-  </head>
-    
-  <body>
-  <!-- Fondo animado de Matrix -->
+<!-- Fondo animado de Matrix -->
 <canvas id="matrix-bg"></canvas>
 
 <div class="player-card matrix-theme">
   <div class="matrix-display">
     <div class="song-info">
-      <h1 id="song-title">MATRIX TERMINAL v4.0</h1>
-      <p id="artist-name">Estado: Esperando archivo...</p>
+      <h1 id="song-title">MATRIX TERMINAL v5.0</h1>
+      <p id="artist-name">Cargando sistema...</p>
     </div>
     
-    <!-- ECUALIZADOR VISUAL (BARRAS DIGITALES) -->
-    <div class="visualizer-container" id="visualizer">
-      <!-- Las barras se generarán dinámicamente con JavaScript -->
-    </div>
+    <!-- ECUALIZADOR VISUAL -->
+    <div class="visualizer-container" id="visualizer"></div>
   </div>
   
   <!-- MODIFICADORES DE SONIDO -->
@@ -37,21 +24,18 @@
     </div>
   </div>
 
-  <!-- CONTROLES -->
+  <!-- CONTROLES PRINCIPALES DE PLAYLIST -->
   <div class="controls">
+    <button class="control-btn" id="prev-btn">⏮️</button>
     <button class="control-btn play-btn" id="play-btn">▶️ RUN</button>
+    <button class="control-btn" id="next-btn">⏭️</button>
   </div>
   
-  <!-- IMPORTADOR -->
+  <!-- SELECCIÓN DE MODO E IMPORTADOR -->
   <div class="import-container">
-    <label for="audio-file" class="import-label">📂 Cargar Archivo .MP3 / .WAV</label>
+    <label for="audio-file" class="import-label">📂 O Cargar archivo propio .MP3</label>
     <input type="file" id="audio-file" accept="audio/*">
   </div>
   
-  <p class="nota-seguridad">SISTEMA CONECTADO AL CORE</p>
+  <p class="nota-seguridad">SISTEMA PLAYLIST CORE v5.0</p>
 </div>
-    <script  src="./script.js"></script>
-
-  </body>
-  
-</html>
