@@ -2,36 +2,30 @@
 const canvas = document.getElementById('matrix-bg');
 const ctx = canvas.getContext('2d');
 
-// Ajustar tamaño del canvas al navegador
+const katakana = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890XYZ";
+const alphabet = katakana.split("");
+const fontSize = 16;
+let rainDrops = [];
+
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  const columns = Math.floor(canvas.width / fontSize);
+  while (rainDrops.length < columns) {
+    rainDrops.push(Math.random() * -canvas.height / fontSize);
+  }
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-const katakana = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890XYZ";
-const alphabet = katakana.split("");
-
-const fontSize = 16;
-let columns = canvas.width / fontSize;
-const rainDrops = [];
-
-for (let x = 0; x < columns; x++) {
-  rainDrops[x] = 1;
-}
-
 function drawMatrix() {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'; // Crea el efecto de rastro difuminado
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   ctx.fillStyle = '#00ff41';
   ctx.font = fontSize + 'px monospace';
-
   for (let i = 0; i < rainDrops.length; i++) {
     const text = alphabet[Math.floor(Math.random() * alphabet.length)];
     ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
-
     if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
       rainDrops[i] = 0;
     }
@@ -41,26 +35,33 @@ function drawMatrix() {
 setInterval(drawMatrix, 30);
 
 
-// --- 2. CONFIGURACIÓN DEL REPRODUCTOR, FILTROS Y ECUALIZADOR ---
+// --- 2. CONFIGURACIÓN DEL REPRODUCTOR, PLAYLIST Y NODOS ---
 const playBtn = document.getElementById('play-btn');
+const prevBtn = document.getElementById('prev-btn');
+const nextBtn = document.getElementById('next-btn');
 const audioFileInput = document.getElementById('audio-file');
 const songTitle = document.getElementById('song-title');
 const artistName = document.getElementById('artist-name');
 const pitchSlider = document.getElementById('pitch-slider');
 const distortionSlider = document.getElementById('distortion-slider');
+const volumeSlider = document.getElementById('volume-slider'); // Control añadido
+const playlistContainer = document.getElementById('playlist-tracks'); // Contenedor añadido
 const visualizerContainer = document.getElementById('visualizer');
 
 let audioCtx = null;
-let audioBuffer = null;
 let currentSource = null;
 let isPlaying = false;
 
-// Nodos de audio profesionales
+// Nodos Web Audio API
 let distortionNode = null;
+let gainNode = null; // Nodo de volumen añadido
 let analyserNode = null;
 let dataArray = [];
 
-// Crear las 14 barritas físicas del ecualizador en el HTML mediante JS
+// Estado de la Playlist
+let playlist = []; // Guarda objetos { name: string, buffer: AudioBuffer }
+let currentTrackIndex = 0;
+
 const totalBars = 14;
 const barElements = [];
 for (let i = 0; i < totalBars; i++) {
@@ -70,32 +71,81 @@ for (let i = 0; i < totalBars; i++) {
   barElements.push(bar);
 }
 
-// Cargar archivo de audio local sin bloqueos
+// Cargar múltiples archivos a la Playlist
 audioFileInput.addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  songTitle.textContent = file.name;
-  artistName.textContent = "Estado: Decodificando código...";
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
 
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
 
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    audioCtx.decodeAudioData(evt.target.result, function(buffer) {
-      audioBuffer = buffer;
-      artistName.textContent = "Estado: Archivo cargado [Listo]";
-      if (isPlaying) stopAudio();
-    }, function(err) {
-      artistName.textContent = "Error de descompresión de datos.";
-    });
-  };
-  reader.readAsArrayBuffer(file);
+  artistName.textContent = `Estado: Decodificando ${files.length} pista(s)...`;
+
+  let loadedCount = 0;
+
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      audioCtx.decodeAudioData(evt.target.result, function(buffer) {
+        playlist.push({ name: file.name, buffer: buffer });
+        loadedCount++;
+        
+        // Actualizar la interfaz de la playlist
+        updatePlaylistUI();
+
+        if (loadedCount === files.length) {
+          artistName.textContent = "Estado: Playlist actualizada [Lista]";
+          // Si no había nada reproduciéndose, seleccionamos la primera pista nueva
+          if (!isPlaying && playlist.length === files.length) {
+            selectTrack(0, false);
+          }
+        }
+      }, function(err) {
+        console.error("Error al decodificar audio:", err);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  });
 });
 
-// Algoritmo de distorsión digital
+// Renderizar la lista de reproducción en el DOM
+function updatePlaylistUI() {
+  playlistContainer.innerHTML = '';
+  playlist.forEach((track, index) => {
+    const li = document.createElement('li');
+    li.textContent = `${index + 1}. ${track.name}`;
+    li.classList.add('track-item');
+    if (index === currentTrackIndex) li.classList.add('active');
+    
+    li.addEventListener('click', () => {
+      selectTrack(index, true);
+    });
+    playlistContainer.appendChild(li);
+  });
+}
+
+// Seleccionar pista de la playlist
+function selectTrack(index, autoPlay = true) {
+  if (index < 0 || index >= playlist.length) return;
+  
+  if (isPlaying) stopAudio();
+  
+  currentTrackIndex = index;
+  songTitle.textContent = playlist[index].name;
+  
+  updatePlaylistUI();
+
+  if (autoPlay) {
+    isPlaying = true;
+    playBtn.textContent = "固 HALT";
+    playAudio();
+  } else {
+    artistName.textContent = "Estado: Pista seleccionada";
+  }
+}
+
+// Algoritmo de distorsión
 function makeDistortionCurve(amount) {
   const k = typeof amount === 'number' ? amount : 50;
   const n_samples = 44100;
@@ -108,94 +158,125 @@ function makeDistortionCurve(amount) {
   return curve;
 }
 
-// Renderizar el movimiento de las barras según la frecuencia de la música
+// Animación de frecuencias
 function renderVisuals() {
   if (!isPlaying) return;
   requestAnimationFrame(renderVisuals);
 
-  // Extraer las frecuencias actuales del sonido en ejecución
   analyserNode.getByteFrequencyData(dataArray);
 
-  // Mapear los datos de audio a nuestras barras del DOM
   for (let i = 0; i < totalBars; i++) {
-    // Tomamos una porción balanceada del array de frecuencias
     const dataIndex = Math.floor((i / totalBars) * dataArray.length * 0.6);
     const value = dataArray[dataIndex];
-    
-    // Convertir el valor de frecuencia (0 a 255) a píxeles de altura (2px a 55px)
     const heightPercentage = (value / 255) * 55;
     barElements[i].style.height = `${Math.max(2, heightPercentage)}px`;
   }
 }
 
-// Iniciar reproducción
+// Iniciar audio enlazando la nueva cadena de GainNode
 function playAudio() {
-  if (!audioBuffer || !audioCtx) {
-    artistName.textContent = "Aviso: Sube un archivo .mp3";
+  if (playlist.length === 0 || !audioCtx) {
+    artistName.textContent = "Aviso: Carga archivos a la playlist";
     isPlaying = false;
     playBtn.textContent = "▶️ RUN";
     return;
   }
 
-  currentSource = audioCtx.createBufferSource();
-  currentSource.buffer = audioBuffer;
+  const track = playlist[currentTrackIndex];
 
-  // Nodo de distorsión
+  currentSource = audioCtx.createBufferSource();
+  currentSource.buffer = track.buffer;
+
+  // 1. Nodo de Distorsión
   distortionNode = audioCtx.createWaveShaper();
   distortionNode.curve = makeDistortionCurve(parseInt(distortionSlider.value));
   distortionNode.oversample = '4x';
 
-  // Nodo Analizador para el ecualizador
+  // 2. Nodo de Volumen (GainNode)
+  gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime);
+
+  // 3. Nodo Analizador
   analyserNode = audioCtx.createAnalyser();
-  analyserNode.fftSize = 64; // Cantidad de muestras de frecuencias
+  analyserNode.fftSize = 64;
   const bufferLength = analyserNode.frequencyBinCount;
   dataArray = new Uint8Array(bufferLength);
 
+  // Modificar Pitch (Velocidad)
   currentSource.playbackRate.value = parseFloat(pitchSlider.value);
 
-  // CONECTAR CADENA: Fuente -> Distorsión -> Analizador -> Altavoces
+  // NUEVA CADENA CONECTADA: Source -> Distortion -> Gain (Volumen) -> Analyser -> Output
   currentSource.connect(distortionNode);
-  distortionNode.connect(analyserNode);
+  distortionNode.connect(gainNode);
+  gainNode.connect(analyserNode);
   analyserNode.connect(audioCtx.destination);
 
   currentSource.start(0);
-  artistName.textContent = "Estado: Transmitiendo datos...";
+  artistName.textContent = `Transmitiendo: [Pista ${currentTrackIndex + 1}/${playlist.length}]`;
   
-  // Encender bucle visual
   renderVisuals();
 
   currentSource.onended = () => {
-    if (isPlaying) stopAudio();
+    // Si terminó por sí sola, salta automáticamente a la siguiente pista
+    if (isPlaying) {
+      if (currentTrackIndex + 1 < playlist.length) {
+        selectTrack(currentTrackIndex + 1, true);
+      } else {
+        stopAudio();
+        artistName.textContent = "Estado: Fin de la playlist";
+      }
+    }
   };
 }
 
 function stopAudio() {
-  if (currentSource) {
-    currentSource.stop();
-    currentSource.disconnect();
-  }
   isPlaying = false;
   playBtn.textContent = "▶️ RUN";
   artistName.textContent = "Estado: Conexión pausada";
-  
-  // Resetear barras al apagar
+
+  if (currentSource) {
+    try { currentSource.stop(); } catch(e) {}
+    currentSource.disconnect();
+    currentSource = null;
+  }
   barElements.forEach(bar => bar.style.height = '2px');
 }
 
-// Eventos
+// --- 3. EVENTOS DE INTERFAZ ---
 playBtn.addEventListener('click', () => {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
   isPlaying = !isPlaying;
   if (isPlaying) {
     playBtn.textContent = "固 HALT";
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     playAudio();
   } else {
     stopAudio();
   }
 });
 
+// Botones de navegación de la playlist
+prevBtn.addEventListener('click', () => {
+  if (currentTrackIndex > 0) {
+    selectTrack(currentTrackIndex - 1, isPlaying);
+  }
+});
+
+nextBtn.addEventListener('click', () => {
+  if (currentTrackIndex + 1 < playlist.length) {
+    selectTrack(currentTrackIndex + 1, isPlaying);
+  }
+});
+
+// Control de volumen reactivo en tiempo real
+volumeSlider.addEventListener('input', (e) => {
+  if (gainNode && audioCtx) {
+    gainNode.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
+  }
+});
+
 pitchSlider.addEventListener('input', (e) => {
-  if (currentSource) currentSource.playbackRate.value = parseFloat(e.target.value);
+  if (currentSource && isPlaying) currentSource.playbackRate.value = parseFloat(e.target.value);
 });
 
 distortionSlider.addEventListener('input', (e) => {
