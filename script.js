@@ -35,12 +35,11 @@ function drawMatrix() {
 setInterval(drawMatrix, 30);
 
 
-// --- 2. BASE DE DATOS LOCAL (PERSISTENCIA DE AUDIO) ---
+// --- 2. BASE DE DATOS LOCAL (PERSISTENCIA VIA INDEXEDDB) ---
 const DB_NAME = "MatrixPlayerDB";
 const STORE_NAME = "playlist";
 let db = null;
 
-// Inicializar base de datos IndexedDB
 function initDB(callback) {
   const request = indexedDB.open(DB_NAME, 1);
   request.onupgradeneeded = function(e) {
@@ -58,17 +57,15 @@ function initDB(callback) {
   };
 }
 
-// Guardar una canción en la base de datos
 function saveTrackToDB(name, fileBlob) {
   if (!db) return;
   const transaction = db.transaction([STORE_NAME], "readwrite");
-  const store = transaction.objectStore(transaction.objectStoreNames[0] || STORE_NAME);
+  const store = transaction.objectStore(STORE_NAME);
   store.add({ name: name, blob: fileBlob });
 }
 
-// Cargar todas las canciones guardadas al iniciar la app
 function loadPlaylistFromDB() {
-  if (!db) return;
+  if (!db || !audioCtx) return;
   const transaction = db.transaction([STORE_NAME], "readonly");
   const store = transaction.objectStore(STORE_NAME);
   const request = store.getAll();
@@ -93,7 +90,7 @@ function loadPlaylistFromDB() {
             artistName.textContent = "Estado: Playlist restaurada del Core";
             selectTrack(0, false);
           }
-        }, function(err) { console.error("Error decodificando cache", err); });
+        }, function(err) { console.error("Error decodificando caché local", err); });
       };
       reader.readAsArrayBuffer(trackData.blob);
     });
@@ -138,24 +135,39 @@ for (let i = 0; i < totalBars; i++) {
   barElements.push(bar);
 }
 
-// Inicializar Audio y Base de Datos al cargar la ventana
+// Inicialización asíncrona segura de la base de datos
 window.addEventListener('DOMContentLoaded', () => {
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   initDB(() => {
-    loadPlaylistFromDB();
+    if (audioCtx) {
+      loadPlaylistFromDB();
+    }
   });
 });
+
+// Forzar activación del AudioContext tras interacciones del usuario (Evita bloqueos de navegador)
+function ensureAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (db && playlist.length === 0) {
+      loadPlaylistFromDB();
+    }
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
 
 // Capturar e importar nuevos archivos
 audioFileInput.addEventListener('change', function(e) {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
 
+  ensureAudioContext();
+
   artistName.textContent = `Estado: Descifrando ${files.length} pista(s)...`;
   let loadedCount = 0;
 
   files.forEach(file => {
-    // Guardar copia binaria persistente en base de datos local
     saveTrackToDB(file.name, file);
 
     const reader = new FileReader();
@@ -189,6 +201,7 @@ function updatePlaylistUI() {
     if (index === currentTrackIndex) li.classList.add('active');
     
     li.addEventListener('click', () => {
+      ensureAudioContext();
       selectTrack(index, true);
     });
     playlistContainer.appendChild(li);
@@ -299,14 +312,14 @@ function stopAudio() {
   barElements.forEach(bar => bar.style.height = '2px');
 }
 
-// --- 4. EVENTOS DE INTERFAZ ---
+// --- 4. ASIGNACIÓN DINÁMICA DE EVENTOS DE INTERFAZ ---
 playBtn.addEventListener('click', () => {
+  ensureAudioContext();
+
   if (playlist.length === 0) {
     artistName.textContent = "Aviso: Sube canciones primero";
     return;
   }
-  
-  if (audioCtx.state === 'suspended') audioCtx.resume();
 
   isPlaying = !isPlaying;
   if (isPlaying) {
@@ -320,9 +333,5 @@ playBtn.addEventListener('click', () => {
 });
 
 volumeSlider.addEventListener('input', (e) => {
+  const volValue = parseFloat(e.target.value);
   if (gainNode && audioCtx) {
-    gainNode.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
-  }
-});
-
-prevBtn.addEventListener('click', () => {
