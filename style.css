@@ -20,20 +20,20 @@ body {
   width: 100%;
   height: 100%;
   z-index: 1;
-  opacity: 0.35;
+  opacity: 0.35; /* Ajusta esto si quieres que las letras de fondo brillen más o menos */
 }
 
 /* Tarjeta por encima de la animación */
 .player-card {
   position: relative;
   z-index: 2;
-  background: rgba(3, 10, 3, 0.93);
+  background: rgba(3, 10, 3, 0.9);
   border: 2px solid #00ff41;
   padding: 25px;
   border-radius: 8px;
   box-shadow: 0 0 30px rgba(0, 255, 65, 0.4), inset 0 0 15px rgba(0, 255, 65, 0.2);
   text-align: center;
-  width: 340px;
+  width: 330px;
   color: #00ff41;
 }
 
@@ -73,7 +73,7 @@ body {
 .bar {
   background: #00ff41;
   width: 6%;
-  height: 2px;
+  height: 2px; /* Altura mínima inicial */
   box-shadow: 0 0 8px #00ff41;
   transition: height 0.05s ease;
 }
@@ -98,113 +98,28 @@ input[type="range"] {
   cursor: pointer;
 }
 
-/* GRUPO DE BOTONES DE NAVEGACIÓN Y REPRODUCCIÓN */
-.controls { 
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px; 
-}
+.controls { margin-bottom: 20px; }
 
-.control-btn {
+.play-btn {
   background: transparent;
   color: #00ff41;
   border: 2px solid #00ff41;
+  padding: 10px 35px;
   border-radius: 4px;
   font-family: 'Share Tech Mono', monospace;
+  font-size: 16px;
   font-weight: bold;
   cursor: pointer;
   box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
   transition: all 0.2s ease;
 }
 
-.play-btn {
-  padding: 10px 30px;
-  font-size: 16px;
-}
-
-.nav-btn {
-  padding: 10px 15px;
-  font-size: 14px;
-}
-
-.control-btn:hover {
+.play-btn:hover {
   background: #00ff41;
   color: #000;
   box-shadow: 0 0 20px #00ff41;
 }
 
-/* PANEL DE PLAYLIST CON SCROLL NEÓN */
-.playlist-container {
-  background: rgba(0, 10, 0, 0.8);
-  border: 1px solid #005f11;
-  border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 20px;
-  text-align: left;
-}
-
-.playlist-title {
-  font-size: 11px;
-  margin: 0 0 8px 0;
-  color: #00ff41;
-  letter-spacing: 1px;
-  border-bottom: 1px dashed #003300;
-  padding-bottom: 4px;
-}
-
-#playlist-tracks {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 90px;
-  overflow-y: auto;
-}
-
-/* Elementos de la lista de canciones */
-.track-item {
-  font-size: 12px;
-  padding: 6px 8px;
-  color: #008f11;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-radius: 2px;
-  transition: all 0.15s;
-}
-
-.track-item:hover {
-  background: rgba(0, 255, 65, 0.1);
-  color: #00ff41;
-}
-
-/* Pista en reproducción actual */
-.track-item.active {
-  background: rgba(0, 255, 65, 0.2);
-  color: #00ff41;
-  border-left: 3px solid #00ff41;
-  font-weight: bold;
-  text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
-}
-
-/* Personalización de la barra de desplazamiento (Scrollbar) */
-#playlist-tracks::-webkit-scrollbar {
-  width: 6px;
-}
-#playlist-tracks::-webkit-scrollbar-track {
-  background: #001100;
-}
-#playlist-tracks::-webkit-scrollbar-thumb {
-  background: #005f11;
-  border-radius: 3px;
-}
-#playlist-tracks::-webkit-scrollbar-thumb:hover {
-  background: #00ff41;
-}
-
-/* IMPORTADOR E INFERIORES */
 .import-container { margin-top: 15px; }
 input[type="file"] { display: none; }
 

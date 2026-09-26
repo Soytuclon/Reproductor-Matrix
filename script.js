@@ -2,30 +2,36 @@
 const canvas = document.getElementById('matrix-bg');
 const ctx = canvas.getContext('2d');
 
-const katakana = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890XYZ";
-const alphabet = katakana.split("");
-const fontSize = 16;
-let rainDrops = [];
-
+// Ajustar tamaño del canvas al navegador
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-  const columns = Math.floor(canvas.width / fontSize);
-  while (rainDrops.length < columns) {
-    rainDrops.push(Math.random() * -canvas.height / fontSize);
-  }
 }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
+const katakana = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890XYZ";
+const alphabet = katakana.split("");
+
+const fontSize = 16;
+let columns = canvas.width / fontSize;
+const rainDrops = [];
+
+for (let x = 0; x < columns; x++) {
+  rainDrops[x] = 1;
+}
+
 function drawMatrix() {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'; // Crea el efecto de rastro difuminado
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   ctx.fillStyle = '#00ff41';
   ctx.font = fontSize + 'px monospace';
+
   for (let i = 0; i < rainDrops.length; i++) {
     const text = alphabet[Math.floor(Math.random() * alphabet.length)];
     ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
+
     if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
       rainDrops[i] = 0;
     }
@@ -35,97 +41,26 @@ function drawMatrix() {
 setInterval(drawMatrix, 30);
 
 
-// --- 2. BASE DE DATOS LOCAL (PERSISTENCIA VIA INDEXEDDB) ---
-const DB_NAME = "MatrixPlayerDB";
-const STORE_NAME = "playlist";
-let db = null;
-
-function initDB(callback) {
-  const request = indexedDB.open(DB_NAME, 1);
-  request.onupgradeneeded = function(e) {
-    const database = e.target.result;
-    if (!database.objectStoreNames.contains(STORE_NAME)) {
-      database.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
-    }
-  };
-  request.onsuccess = function(e) {
-    db = e.target.result;
-    if (callback) callback();
-  };
-  request.onerror = function() {
-    artistName.textContent = "Error: Al inicializar el almacenamiento local.";
-  };
-}
-
-function saveTrackToDB(name, fileBlob) {
-  if (!db) return;
-  const transaction = db.transaction([STORE_NAME], "readwrite");
-  const store = transaction.objectStore(STORE_NAME);
-  store.add({ name: name, blob: fileBlob });
-}
-
-function loadPlaylistFromDB() {
-  if (!db || !audioCtx) return;
-  const transaction = db.transaction([STORE_NAME], "readonly");
-  const store = transaction.objectStore(STORE_NAME);
-  const request = store.getAll();
-
-  request.onsuccess = function(e) {
-    const savedTracks = e.target.result;
-    if (savedTracks.length === 0) return;
-
-    artistName.textContent = `Estado: Restaurando ${savedTracks.length} pista(s)...`;
-    let processed = 0;
-
-    savedTracks.forEach(trackData => {
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        audioCtx.decodeAudioData(evt.target.result, function(buffer) {
-          playlist.push({ name: trackData.name, buffer: buffer });
-          processed++;
-          
-          updatePlaylistUI();
-
-          if (processed === savedTracks.length) {
-            artistName.textContent = "Estado: Playlist restaurada del Core";
-            selectTrack(0, false);
-          }
-        }, function(err) { console.error("Error decodificando caché local", err); });
-      };
-      reader.readAsArrayBuffer(trackData.blob);
-    });
-  };
-}
-
-
-// --- 3. CONFIGURACIÓN DEL REPRODUCTOR Y PLAYLIST ---
+// --- 2. CONFIGURACIÓN DEL REPRODUCTOR, FILTROS Y ECUALIZADOR ---
 const playBtn = document.getElementById('play-btn');
-const prevBtn = document.getElementById('prev-btn');
-const nextBtn = document.getElementById('next-btn');
 const audioFileInput = document.getElementById('audio-file');
 const songTitle = document.getElementById('song-title');
 const artistName = document.getElementById('artist-name');
 const pitchSlider = document.getElementById('pitch-slider');
 const distortionSlider = document.getElementById('distortion-slider');
-const volumeSlider = document.getElementById('volume-slider');
-const playlistContainer = document.getElementById('playlist-tracks');
 const visualizerContainer = document.getElementById('visualizer');
 
 let audioCtx = null;
+let audioBuffer = null;
 let currentSource = null;
 let isPlaying = false;
 
-let startTime = 0;
-let pauseTime = 0;
-
+// Nodos de audio profesionales
 let distortionNode = null;
-let gainNode = null;
 let analyserNode = null;
 let dataArray = [];
 
-let playlist = [];
-let currentTrackIndex = 0;
-
+// Crear las 14 barritas físicas del ecualizador en el HTML mediante JS
 const totalBars = 14;
 const barElements = [];
 for (let i = 0; i < totalBars; i++) {
@@ -135,99 +70,32 @@ for (let i = 0; i < totalBars; i++) {
   barElements.push(bar);
 }
 
-// Inicialización asíncrona segura de la base de datos
-window.addEventListener('DOMContentLoaded', () => {
-  initDB(() => {
-    if (audioCtx) {
-      loadPlaylistFromDB();
-    }
-  });
-});
+// Cargar archivo de audio local sin bloqueos
+audioFileInput.addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
 
-// Forzar activación del AudioContext tras interacciones del usuario (Evita bloqueos de navegador)
-function ensureAudioContext() {
+  songTitle.textContent = file.name;
+  artistName.textContent = "Estado: Decodificando código...";
+
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (db && playlist.length === 0) {
-      loadPlaylistFromDB();
-    }
   }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-}
 
-// Capturar e importar nuevos archivos
-audioFileInput.addEventListener('change', function(e) {
-  const files = Array.from(e.target.files);
-  if (files.length === 0) return;
-
-  ensureAudioContext();
-
-  artistName.textContent = `Estado: Descifrando ${files.length} pista(s)...`;
-  let loadedCount = 0;
-
-  files.forEach(file => {
-    saveTrackToDB(file.name, file);
-
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      audioCtx.decodeAudioData(evt.target.result, function(buffer) {
-        playlist.push({ name: file.name, buffer: buffer });
-        loadedCount++;
-        
-        updatePlaylistUI();
-
-        if (loadedCount === files.length) {
-          artistName.textContent = "Estado: Nodos de la lista cargados";
-          if (!isPlaying && playlist.length === files.length) {
-            selectTrack(0, false);
-          }
-        }
-      }, function(err) {
-        artistName.textContent = "Error analítico de decodificación.";
-      });
-    };
-    reader.readAsArrayBuffer(file);
-  });
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    audioCtx.decodeAudioData(evt.target.result, function(buffer) {
+      audioBuffer = buffer;
+      artistName.textContent = "Estado: Archivo cargado [Listo]";
+      if (isPlaying) stopAudio();
+    }, function(err) {
+      artistName.textContent = "Error de descompresión de datos.";
+    });
+  };
+  reader.readAsArrayBuffer(file);
 });
 
-function updatePlaylistUI() {
-  playlistContainer.innerHTML = '';
-  playlist.forEach((track, index) => {
-    const li = document.createElement('li');
-    li.textContent = `${index + 1}. ${track.name}`;
-    li.classList.add('track-item');
-    if (index === currentTrackIndex) li.classList.add('active');
-    
-    li.addEventListener('click', () => {
-      ensureAudioContext();
-      selectTrack(index, true);
-    });
-    playlistContainer.appendChild(li);
-  });
-}
-
-function selectTrack(index, autoPlay = true) {
-  if (index < 0 || index >= playlist.length) return;
-  
-  stopAudio();
-  pauseTime = 0;
-  
-  currentTrackIndex = index;
-  songTitle.textContent = playlist[index].name;
-  
-  updatePlaylistUI();
-
-  if (autoPlay) {
-    isPlaying = true;
-    playBtn.textContent = "固 HALT";
-    playAudio();
-  } else {
-    artistName.textContent = `Pista ${index + 1} en espera`;
-  }
-}
-
+// Algoritmo de distorsión digital
 function makeDistortionCurve(amount) {
   const k = typeof amount === 'number' ? amount : 50;
   const n_samples = 44100;
@@ -240,98 +108,96 @@ function makeDistortionCurve(amount) {
   return curve;
 }
 
+// Renderizar el movimiento de las barras según la frecuencia de la música
 function renderVisuals() {
-  if (!isPlaying || !analyserNode) return;
+  if (!isPlaying) return;
   requestAnimationFrame(renderVisuals);
 
+  // Extraer las frecuencias actuales del sonido en ejecución
   analyserNode.getByteFrequencyData(dataArray);
 
+  // Mapear los datos de audio a nuestras barras del DOM
   for (let i = 0; i < totalBars; i++) {
+    // Tomamos una porción balanceada del array de frecuencias
     const dataIndex = Math.floor((i / totalBars) * dataArray.length * 0.6);
     const value = dataArray[dataIndex];
+    
+    // Convertir el valor de frecuencia (0 a 255) a píxeles de altura (2px a 55px)
     const heightPercentage = (value / 255) * 55;
     barElements[i].style.height = `${Math.max(2, heightPercentage)}px`;
   }
 }
 
+// Iniciar reproducción
 function playAudio() {
-  if (playlist.length === 0 || !audioCtx) return;
-
-  const track = playlist[currentTrackIndex];
+  if (!audioBuffer || !audioCtx) {
+    artistName.textContent = "Aviso: Sube un archivo .mp3";
+    isPlaying = false;
+    playBtn.textContent = "▶️ RUN";
+    return;
+  }
 
   currentSource = audioCtx.createBufferSource();
-  currentSource.buffer = track.buffer;
+  currentSource.buffer = audioBuffer;
 
+  // Nodo de distorsión
   distortionNode = audioCtx.createWaveShaper();
   distortionNode.curve = makeDistortionCurve(parseInt(distortionSlider.value));
   distortionNode.oversample = '4x';
 
-  gainNode = audioCtx.createGain();
-  gainNode.gain.setValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime);
-
+  // Nodo Analizador para el ecualizador
   analyserNode = audioCtx.createAnalyser();
-  analyserNode.fftSize = 64;
+  analyserNode.fftSize = 64; // Cantidad de muestras de frecuencias
   const bufferLength = analyserNode.frequencyBinCount;
   dataArray = new Uint8Array(bufferLength);
 
   currentSource.playbackRate.value = parseFloat(pitchSlider.value);
 
+  // CONECTAR CADENA: Fuente -> Distorsión -> Analizador -> Altavoces
   currentSource.connect(distortionNode);
-  distortionNode.connect(gainNode);
-  gainNode.connect(analyserNode);
+  distortionNode.connect(analyserNode);
   analyserNode.connect(audioCtx.destination);
 
-  startTime = audioCtx.currentTime - pauseTime;
-  currentSource.start(0, pauseTime % track.buffer.duration);
+  currentSource.start(0);
+  artistName.textContent = "Estado: Transmitiendo datos...";
   
-  artistName.textContent = `Streaming: [Pista ${currentTrackIndex + 1}/${playlist.length}]`;
+  // Encender bucle visual
   renderVisuals();
 
   currentSource.onended = () => {
-    if (isPlaying) {
-      if (currentTrackIndex + 1 < playlist.length) {
-        selectTrack(currentTrackIndex + 1, true);
-      } else {
-        stopAudio();
-        pauseTime = 0;
-        artistName.textContent = "Estado: Fin del canal de datos";
-      }
-    }
+    if (isPlaying) stopAudio();
   };
 }
 
 function stopAudio() {
   if (currentSource) {
-    if (audioCtx) {
-      pauseTime = audioCtx.currentTime - startTime;
-    }
-    try { currentSource.stop(); } catch(e) {}
+    currentSource.stop();
     currentSource.disconnect();
-    currentSource = null;
   }
+  isPlaying = false;
+  playBtn.textContent = "▶️ RUN";
+  artistName.textContent = "Estado: Conexión pausada";
+  
+  // Resetear barras al apagar
   barElements.forEach(bar => bar.style.height = '2px');
 }
 
-// --- 4. ASIGNACIÓN DINÁMICA DE EVENTOS DE INTERFAZ ---
+// Eventos
 playBtn.addEventListener('click', () => {
-  ensureAudioContext();
-
-  if (playlist.length === 0) {
-    artistName.textContent = "Aviso: Sube canciones primero";
-    return;
-  }
-
   isPlaying = !isPlaying;
   if (isPlaying) {
     playBtn.textContent = "固 HALT";
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     playAudio();
   } else {
-    playBtn.textContent = "▶️ RUN";
-    artistName.textContent = "Estado: Transmisión pausada";
     stopAudio();
   }
 });
 
-volumeSlider.addEventListener('input', (e) => {
-  const volValue = parseFloat(e.target.value);
-  if (gainNode && audioCtx) {
+pitchSlider.addEventListener('input', (e) => {
+  if (currentSource) currentSource.playbackRate.value = parseFloat(e.target.value);
+});
+
+distortionSlider.addEventListener('input', (e) => {
+  if (distortionNode) distortionNode.curve = makeDistortionCurve(parseInt(e.target.value));
+});

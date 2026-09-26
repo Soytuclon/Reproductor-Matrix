@@ -1,72 +1,57 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reproductor Matrix</title>
-  <link rel="stylesheet" href="./style.css">
-</head>
+  <head>
+    <meta charset="UTF-8">
+    <title>Reproductor Matrix</title>
+    <link rel="stylesheet" href="./style.css">
 
-<body>
+  </head>
+    
+  <body>
   <!-- Fondo animado de Matrix -->
-  <canvas id="matrix-bg"></canvas>
+<canvas id="matrix-bg"></canvas>
 
-  <div class="player-card matrix-theme">
-    <div class="matrix-display">
-      <div class="song-info">
-        <h1 id="song-title">MATRIX TERMINAL v4.0</h1>
-        <p id="artist-name">Estado: Esperando archivos...</p>
-      </div>
-      
-      <!-- ECUALIZADOR VISUAL (BARRAS DIGITALES) -->
-      <div class="visualizer-container" id="visualizer">
-        <!-- Las barras se generarán dinámicamente con JavaScript -->
-      </div>
+<div class="player-card matrix-theme">
+  <div class="matrix-display">
+    <div class="song-info">
+      <h1 id="song-title">MATRIX TERMINAL v4.0</h1>
+      <p id="artist-name">Estado: Esperando archivo...</p>
     </div>
     
-    <!-- MODIFICADORES DE SONIDO -->
-    <div class="audio-controls">
-      <div class="control-group">
-        <label for="volume-slider">🔊 Volumen Master</label>
-        <input type="range" id="volume-slider" min="0" max="1.5" step="0.01" value="0.7">
-      </div>
-      <div class="control-group">
-        <label for="pitch-slider">🎚️ Velocidad / Tono</label>
-        <input type="range" id="pitch-slider" min="0.5" max="2" step="0.1" value="1">
-      </div>
-      <div class="control-group">
-        <label for="distortion-slider">⚡ Distorsión Cypher</label>
-        <input type="range" id="distortion-slider" min="0" max="100" step="5" value="0">
-      </div>
+    <!-- ECUALIZADOR VISUAL (BARRAS DIGITALES) -->
+    <div class="visualizer-container" id="visualizer">
+      <!-- Las barras se generarán dinámicamente con JavaScript -->
     </div>
-
-    <!-- CONTROLES DE REPRODUCCIÓN -->
-    <div class="controls">
-      <button class="control-btn nav-btn" id="prev-btn">⏮</button>
-      <button class="control-btn play-btn" id="play-btn">▶️ RUN</button>
-      <button class="control-btn nav-btn" id="next-btn">⏭</button>
+  </div>
+  
+  <!-- MODIFICADORES DE SONIDO -->
+  <div class="audio-controls">
+    <div class="control-group">
+      <label for="pitch-slider">🎚️ Velocidad / Tono</label>
+      <input type="range" id="pitch-slider" min="0.5" max="2" step="0.1" value="1">
     </div>
-    
-    <!-- PANEL DE LISTA DE REPRODUCCIÓN -->
-    <div class="playlist-container">
-      <p class="playlist-title">📁 ESTRUCTURA DE PISTAS (PLAYLIST)</p>
-      <ul id="playlist-tracks">
-        <!-- Los elementos cargados se inyectarán aquí -->
-      </ul>
+    <div class="control-group">
+      <label for="distortion-slider">⚡ Distorsión Cypher</label>
+      <input type="range" id="distortion-slider" min="0" max="100" step="5" value="0">
     </div>
-    
-    <!-- IMPORTADOR MÚLTIPLE -->
-    <div class="import-container">
-      <label for="audio-file" class="import-label">📂 Cargar Archivos .MP3 / .WAV</label>
-      <input type="file" id="audio-file" accept="audio/*" multiple>
-    </div>
-    
-    <p class="nota-seguridad">SISTEMA CONECTADO AL CORE</p>
   </div>
 
-  <script src="./script.js"></script>
-</body>
+  <!-- CONTROLES -->
+  <div class="controls">
+    <button class="control-btn play-btn" id="play-btn">▶️ RUN</button>
+  </div>
+  
+  <!-- IMPORTADOR -->
+  <div class="import-container">
+    <label for="audio-file" class="import-label">📂 Cargar Archivo .MP3 / .WAV</label>
+    <input type="file" id="audio-file" accept="audio/*">
+  </div>
+  
+  <p class="nota-seguridad">SISTEMA CONECTADO AL CORE</p>
+</div>
+    <script  src="./script.js"></script>
 
+  </body>
+  
 </html>
-
