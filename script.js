@@ -35,7 +35,73 @@ function drawMatrix() {
 setInterval(drawMatrix, 30);
 
 
-// --- 2. CONFIGURACIÓN DEL REPRODUCTOR, PLAYLIST Y NODOS ---
+// --- 2. BASE DE DATOS LOCAL (PERSISTENCIA DE AUDIO) ---
+const DB_NAME = "MatrixPlayerDB";
+const STORE_NAME = "playlist";
+let db = null;
+
+// Inicializar base de datos IndexedDB
+function initDB(callback) {
+  const request = indexedDB.open(DB_NAME, 1);
+  request.onupgradeneeded = function(e) {
+    const database = e.target.result;
+    if (!database.objectStoreNames.contains(STORE_NAME)) {
+      database.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+    }
+  };
+  request.onsuccess = function(e) {
+    db = e.target.result;
+    if (callback) callback();
+  };
+  request.onerror = function() {
+    artistName.textContent = "Error: Al inicializar el almacenamiento local.";
+  };
+}
+
+// Guardar una canción en la base de datos
+function saveTrackToDB(name, fileBlob) {
+  if (!db) return;
+  const transaction = db.transaction([STORE_NAME], "readwrite");
+  const store = transaction.objectStore(transaction.objectStoreNames[0] || STORE_NAME);
+  store.add({ name: name, blob: fileBlob });
+}
+
+// Cargar todas las canciones guardadas al iniciar la app
+function loadPlaylistFromDB() {
+  if (!db) return;
+  const transaction = db.transaction([STORE_NAME], "readonly");
+  const store = transaction.objectStore(STORE_NAME);
+  const request = store.getAll();
+
+  request.onsuccess = function(e) {
+    const savedTracks = e.target.result;
+    if (savedTracks.length === 0) return;
+
+    artistName.textContent = `Estado: Restaurando ${savedTracks.length} pista(s)...`;
+    let processed = 0;
+
+    savedTracks.forEach(trackData => {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        audioCtx.decodeAudioData(evt.target.result, function(buffer) {
+          playlist.push({ name: trackData.name, buffer: buffer });
+          processed++;
+          
+          updatePlaylistUI();
+
+          if (processed === savedTracks.length) {
+            artistName.textContent = "Estado: Playlist restaurada del Core";
+            selectTrack(0, false);
+          }
+        }, function(err) { console.error("Error decodificando cache", err); });
+      };
+      reader.readAsArrayBuffer(trackData.blob);
+    });
+  };
+}
+
+
+// --- 3. CONFIGURACIÓN DEL REPRODUCTOR Y PLAYLIST ---
 const playBtn = document.getElementById('play-btn');
 const prevBtn = document.getElementById('prev-btn');
 const nextBtn = document.getElementById('next-btn');
@@ -44,22 +110,23 @@ const songTitle = document.getElementById('song-title');
 const artistName = document.getElementById('artist-name');
 const pitchSlider = document.getElementById('pitch-slider');
 const distortionSlider = document.getElementById('distortion-slider');
-const volumeSlider = document.getElementById('volume-slider'); // Control añadido
-const playlistContainer = document.getElementById('playlist-tracks'); // Contenedor añadido
+const volumeSlider = document.getElementById('volume-slider');
+const playlistContainer = document.getElementById('playlist-tracks');
 const visualizerContainer = document.getElementById('visualizer');
 
 let audioCtx = null;
 let currentSource = null;
 let isPlaying = false;
 
-// Nodos Web Audio API
+let startTime = 0;
+let pauseTime = 0;
+
 let distortionNode = null;
-let gainNode = null; // Nodo de volumen añadido
+let gainNode = null;
 let analyserNode = null;
 let dataArray = [];
 
-// Estado de la Playlist
-let playlist = []; // Guarda objetos { name: string, buffer: AudioBuffer }
+let playlist = [];
 let currentTrackIndex = 0;
 
 const totalBars = 14;
@@ -71,45 +138,48 @@ for (let i = 0; i < totalBars; i++) {
   barElements.push(bar);
 }
 
-// Cargar múltiples archivos a la Playlist
+// Inicializar Audio y Base de Datos al cargar la ventana
+window.addEventListener('DOMContentLoaded', () => {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  initDB(() => {
+    loadPlaylistFromDB();
+  });
+});
+
+// Capturar e importar nuevos archivos
 audioFileInput.addEventListener('change', function(e) {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
 
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-
-  artistName.textContent = `Estado: Decodificando ${files.length} pista(s)...`;
-
+  artistName.textContent = `Estado: Descifrando ${files.length} pista(s)...`;
   let loadedCount = 0;
 
   files.forEach(file => {
+    // Guardar copia binaria persistente en base de datos local
+    saveTrackToDB(file.name, file);
+
     const reader = new FileReader();
     reader.onload = function(evt) {
       audioCtx.decodeAudioData(evt.target.result, function(buffer) {
         playlist.push({ name: file.name, buffer: buffer });
         loadedCount++;
         
-        // Actualizar la interfaz de la playlist
         updatePlaylistUI();
 
         if (loadedCount === files.length) {
-          artistName.textContent = "Estado: Playlist actualizada [Lista]";
-          // Si no había nada reproduciéndose, seleccionamos la primera pista nueva
+          artistName.textContent = "Estado: Nodos de la lista cargados";
           if (!isPlaying && playlist.length === files.length) {
             selectTrack(0, false);
           }
         }
       }, function(err) {
-        console.error("Error al decodificar audio:", err);
+        artistName.textContent = "Error analítico de decodificación.";
       });
     };
     reader.readAsArrayBuffer(file);
   });
 });
 
-// Renderizar la lista de reproducción en el DOM
 function updatePlaylistUI() {
   playlistContainer.innerHTML = '';
   playlist.forEach((track, index) => {
@@ -125,11 +195,11 @@ function updatePlaylistUI() {
   });
 }
 
-// Seleccionar pista de la playlist
 function selectTrack(index, autoPlay = true) {
   if (index < 0 || index >= playlist.length) return;
   
-  if (isPlaying) stopAudio();
+  stopAudio();
+  pauseTime = 0;
   
   currentTrackIndex = index;
   songTitle.textContent = playlist[index].name;
@@ -141,11 +211,10 @@ function selectTrack(index, autoPlay = true) {
     playBtn.textContent = "固 HALT";
     playAudio();
   } else {
-    artistName.textContent = "Estado: Pista seleccionada";
+    artistName.textContent = `Pista ${index + 1} en espera`;
   }
 }
 
-// Algoritmo de distorsión
 function makeDistortionCurve(amount) {
   const k = typeof amount === 'number' ? amount : 50;
   const n_samples = 44100;
@@ -158,9 +227,8 @@ function makeDistortionCurve(amount) {
   return curve;
 }
 
-// Animación de frecuencias
 function renderVisuals() {
-  if (!isPlaying) return;
+  if (!isPlaying || !analyserNode) return;
   requestAnimationFrame(renderVisuals);
 
   analyserNode.getByteFrequencyData(dataArray);
@@ -173,68 +241,57 @@ function renderVisuals() {
   }
 }
 
-// Iniciar audio enlazando la nueva cadena de GainNode
 function playAudio() {
-  if (playlist.length === 0 || !audioCtx) {
-    artistName.textContent = "Aviso: Carga archivos a la playlist";
-    isPlaying = false;
-    playBtn.textContent = "▶️ RUN";
-    return;
-  }
+  if (playlist.length === 0 || !audioCtx) return;
 
   const track = playlist[currentTrackIndex];
 
   currentSource = audioCtx.createBufferSource();
   currentSource.buffer = track.buffer;
 
-  // 1. Nodo de Distorsión
   distortionNode = audioCtx.createWaveShaper();
   distortionNode.curve = makeDistortionCurve(parseInt(distortionSlider.value));
   distortionNode.oversample = '4x';
 
-  // 2. Nodo de Volumen (GainNode)
   gainNode = audioCtx.createGain();
   gainNode.gain.setValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime);
 
-  // 3. Nodo Analizador
   analyserNode = audioCtx.createAnalyser();
   analyserNode.fftSize = 64;
   const bufferLength = analyserNode.frequencyBinCount;
   dataArray = new Uint8Array(bufferLength);
 
-  // Modificar Pitch (Velocidad)
   currentSource.playbackRate.value = parseFloat(pitchSlider.value);
 
-  // NUEVA CADENA CONECTADA: Source -> Distortion -> Gain (Volumen) -> Analyser -> Output
   currentSource.connect(distortionNode);
   distortionNode.connect(gainNode);
   gainNode.connect(analyserNode);
   analyserNode.connect(audioCtx.destination);
 
-  currentSource.start(0);
-  artistName.textContent = `Transmitiendo: [Pista ${currentTrackIndex + 1}/${playlist.length}]`;
+  startTime = audioCtx.currentTime - pauseTime;
+  currentSource.start(0, pauseTime % track.buffer.duration);
   
+  artistName.textContent = `Streaming: [Pista ${currentTrackIndex + 1}/${playlist.length}]`;
   renderVisuals();
 
   currentSource.onended = () => {
-    // Si terminó por sí sola, salta automáticamente a la siguiente pista
     if (isPlaying) {
       if (currentTrackIndex + 1 < playlist.length) {
         selectTrack(currentTrackIndex + 1, true);
       } else {
         stopAudio();
-        artistName.textContent = "Estado: Fin de la playlist";
+        pauseTime = 0;
+        artistName.textContent = "Estado: Fin del canal de datos";
       }
     }
   };
 }
 
 function stopAudio() {
-  isPlaying = false;
-  playBtn.textContent = "▶️ RUN";
-  artistName.textContent = "Estado: Conexión pausada";
-
   if (currentSource) {
+    if (audioCtx) {
+      pauseTime = audioCtx.currentTime - startTime;
+    }
     try { currentSource.stop(); } catch(e) {}
     currentSource.disconnect();
     currentSource = null;
@@ -242,43 +299,30 @@ function stopAudio() {
   barElements.forEach(bar => bar.style.height = '2px');
 }
 
-// --- 3. EVENTOS DE INTERFAZ ---
+// --- 4. EVENTOS DE INTERFAZ ---
 playBtn.addEventListener('click', () => {
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  if (playlist.length === 0) {
+    artistName.textContent = "Aviso: Sube canciones primero";
+    return;
+  }
+  
+  if (audioCtx.state === 'suspended') audioCtx.resume();
 
   isPlaying = !isPlaying;
   if (isPlaying) {
     playBtn.textContent = "固 HALT";
     playAudio();
   } else {
+    playBtn.textContent = "▶️ RUN";
+    artistName.textContent = "Estado: Transmisión pausada";
     stopAudio();
   }
 });
 
-// Botones de navegación de la playlist
-prevBtn.addEventListener('click', () => {
-  if (currentTrackIndex > 0) {
-    selectTrack(currentTrackIndex - 1, isPlaying);
-  }
-});
-
-nextBtn.addEventListener('click', () => {
-  if (currentTrackIndex + 1 < playlist.length) {
-    selectTrack(currentTrackIndex + 1, isPlaying);
-  }
-});
-
-// Control de volumen reactivo en tiempo real
 volumeSlider.addEventListener('input', (e) => {
   if (gainNode && audioCtx) {
     gainNode.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
   }
 });
 
-pitchSlider.addEventListener('input', (e) => {
-  if (currentSource && isPlaying) currentSource.playbackRate.value = parseFloat(e.target.value);
-});
-
-distortionSlider.addEventListener('input', (e) => {
-  if (distortionNode) distortionNode.curve = makeDistortionCurve(parseInt(e.target.value));
-});
+prevBtn.addEventListener('click', () => {
