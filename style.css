@@ -1,0 +1,143 @@
+@import url('https://googleapis.com');
+
+body {
+  font-family: 'Share Tech Mono', monospace;
+  background-color: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Lienzo de fondo de Matrix */
+#matrix-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  opacity: 0.35; /* Ajusta esto si quieres que las letras de fondo brillen más o menos */
+}
+
+/* Tarjeta por encima de la animación */
+.player-card {
+  position: relative;
+  z-index: 2;
+  background: rgba(3, 10, 3, 0.9);
+  border: 2px solid #00ff41;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.4), inset 0 0 15px rgba(0, 255, 65, 0.2);
+  text-align: center;
+  width: 330px;
+  color: #00ff41;
+}
+
+.matrix-display {
+  background-color: #000;
+  border: 1px dashed #00ff41;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.song-info h1 { 
+  font-size: 18px; 
+  margin: 0 0 8px 0; 
+  text-shadow: 0 0 5px #00ff41; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.song-info p { font-size: 13px; color: #008f11; margin: 0 0 15px 0; }
+
+/* Contenedor del Ecualizador */
+.visualizer-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 60px;
+  width: 100%;
+  background: rgba(0, 15, 0, 0.7);
+  padding: 5px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #003300;
+}
+
+/* Estilo individual de cada barra */
+.bar {
+  background: #00ff41;
+  width: 6%;
+  height: 2px; /* Altura mínima inicial */
+  box-shadow: 0 0 8px #00ff41;
+  transition: height 0.05s ease;
+}
+
+.audio-controls {
+  background: rgba(0, 20, 0, 0.6);
+  border: 1px solid #005f11;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.control-group { margin-bottom: 12px; }
+.control-group:last-child { margin-bottom: 0; }
+.control-group label { display: block; font-size: 12px; margin-bottom: 5px; color: #00ff41; }
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #00ff41;
+  background: #002200;
+  cursor: pointer;
+}
+
+.controls { margin-bottom: 20px; }
+
+.play-btn {
+  background: transparent;
+  color: #00ff41;
+  border: 2px solid #00ff41;
+  padding: 10px 35px;
+  border-radius: 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+  transition: all 0.2s ease;
+}
+
+.play-btn:hover {
+  background: #00ff41;
+  color: #000;
+  box-shadow: 0 0 20px #00ff41;
+}
+
+.import-container { margin-top: 15px; }
+input[type="file"] { display: none; }
+
+.import-label {
+  display: inline-block;
+  background: #003300;
+  border: 1px solid #00ff41;
+  color: #00ff41;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.import-label:hover {
+  background: #005500;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
+}
+
+.nota-seguridad { font-size: 10px; color: #005f11; margin-top: 15px; letter-spacing: 2px; }
